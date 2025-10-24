@@ -75,10 +75,7 @@ class SpamDetectorUI:
         ttk.Label(algorithm_frame, text="Primary Algorithm:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.primary_algorithm = ttk.Combobox(algorithm_frame, values=[
             "Naive Bayes",
-            "Support Vector Machine (SVM)",
-            "Random Forest",
-            "Logistic Regression",
-            "Neural Network"
+            "Decision Tree"
         ], state="readonly", width=25)
         self.primary_algorithm.grid(row=0, column=1, padx=(10, 0), pady=5)
         self.primary_algorithm.set("Naive Bayes")  # Default selection
@@ -86,10 +83,7 @@ class SpamDetectorUI:
         ttk.Label(algorithm_frame, text="Secondary Algorithm:").grid(row=1, column=0, sticky=tk.W, pady=5)
         self.secondary_algorithm = ttk.Combobox(algorithm_frame, values=[
             "Naive Bayes",
-            "Support Vector Machine (SVM)",
-            "Random Forest",
-            "Logistic Regression",
-            "Neural Network"
+            "Decision Tree"
         ], state="readonly", width=25)
         self.secondary_algorithm.grid(row=1, column=1, padx=(10, 0), pady=5)
         self.secondary_algorithm.set("Support Vector Machine (SVM)")  # Default selection
