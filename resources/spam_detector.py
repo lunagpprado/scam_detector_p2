@@ -1,17 +1,9 @@
 #DECISION TREE DRAFT
 
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.decomposition import TruncatedSVD
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.pipeline import Pipeline
-from sklearn.metrics import classification_report, accuracy_score
-import joblib
-import os
+import numpy as np
 
-MODEL_PATH = "spam_detector_model.joblib"
-
+# Basic Preprocessing
 def load_data(path):
     df = pd.read_csv(path)
     df = df.fillna("")
@@ -23,51 +15,139 @@ def load_data(path):
     )
     return df["text"], df["label"]
 
-def train_model(data_path):
-    print("Loading dataset...")
-    X, y = load_data(data_path)
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
-    )
+# word frequency of spam indicators
+SPAM_WORDS = ["free", "win", "click", "buy", "offer", "money", "urgent", "limited", "discount"]
 
-    print("Training model...")
-    model = Pipeline([
-        ("tfidf", TfidfVectorizer(max_features=8000, stop_words="english")),
-        ("svd", TruncatedSVD(n_components=120, random_state=42)),
-        ("dt", DecisionTreeClassifier(max_depth=12,random_state=42))
-    ])
+def text_to_features(text):
+    text = text.lower()
+    return np.array([text.count(word) for word in SPAM_WORDS])
 
-    model.fit(X_train, y_train)
-    preds = model.predict(X_test)
+# Helper Functions for Tree Building
+def gini_impurity(y):
+    labels, counts = np.unique(y, return_counts=True)
+    probs = counts / counts.sum()
+    return 1 - np.sum(probs ** 2)
 
-    print("\nModel Performance:")
-    print(classification_report(y_test, preds, digits=3))
-    print(f"Accuracy: {accuracy_score(y_test, preds):.3f}")
+def information_gain(y, left_idx, right_idx):
+    if len(left_idx) == 0 or len(right_idx) == 0:
+        return 0
+    left_impurity = gini_impurity(y[left_idx])
+    right_impurity = gini_impurity(y[right_idx])
+    p = len(left_idx) / len(y)
+    return gini_impurity(y) - (p * left_impurity + (1 - p) * right_impurity)
 
-    joblib.dump(model, MODEL_PATH)
-    print(f"\n Model saved to: {MODEL_PATH}")
+def best_split(X, y):
+    best_gain = 0
+    best_feat, best_thresh = None, None
+    n_samples, n_features = X.shape
 
-def predict_email(sender, receiver, subject, body):
-    import os, joblib
-    if not os.path.exists(MODEL_PATH):
-        raise FileNotFoundError("Model not found! Train it first with train_model().")
+    for feat in range(n_features):
+        thresholds = np.unique(X[:, feat])
+        for thresh in thresholds:
+            left_idx = np.where(X[:, feat] <= thresh)[0]
+            right_idx = np.where(X[:, feat] > thresh)[0]
+            gain = information_gain(y, left_idx, right_idx)
+            if gain > best_gain:
+                best_gain = gain
+                best_feat, best_thresh = feat, thresh
+    return best_feat, best_thresh, best_gain
 
-    model = joblib.load(MODEL_PATH)
-    text = f"{sender} {receiver} {subject} {body}"
-    pred = model.predict([text])[0]
-    prob = model.predict_proba([text])[0][1]
-    return pred, prob
+# Decision Tree Node
+class DecisionNode:
+    def __init__(self, feature=None, threshold=None, left=None, right=None, value=None):
+        self.feature = feature
+        self.threshold = threshold
+        self.left = left
+        self.right = right
+        self.value = value
 
+# Decision Tree Classifier
+class DecisionTree:
+    def __init__(self, max_depth=5, min_samples_split=2):
+        self.max_depth = max_depth
+        self.min_samples_split = min_samples_split
+        self.root = None
 
-if __name__ == "__main__":
+    def fit(self, X, y):
+        self.root = self._grow_tree(X, y)
+
+    def _grow_tree(self, X, y, depth=0):
+        n_samples, n_features = X.shape
+        n_labels = len(np.unique(y))
+
+        if (depth >= self.max_depth or n_labels == 1 or n_samples < self.min_samples_split):
+            leaf_value = self._most_common_label(y)
+            return DecisionNode(value=leaf_value)
+
+        feat, thresh, gain = best_split(X, y)
+        if gain == 0 or feat is None:
+            leaf_value = self._most_common_label(y)
+            return DecisionNode(value=leaf_value)
+
+        left_idx = np.where(X[:, feat] <= thresh)[0]
+        right_idx = np.where(X[:, feat] > thresh)[0]
+
+        left = self._grow_tree(X[left_idx, :], y[left_idx], depth + 1)
+        right = self._grow_tree(X[right_idx, :], y[right_idx], depth + 1)
+        return DecisionNode(feature=feat, threshold=thresh, left=left, right=right)
+
+    def _most_common_label(self, y):
+        values, counts = np.unique(y, return_counts=True)
+        return values[np.argmax(counts)]
+
+    def predict_one(self, x):
+        node = self.root
+        while node.value is None:
+            if x[node.feature] <= node.threshold:
+                node = node.left
+            else:
+                node = node.right
+        return node.value
+
+    def predict(self, X):
+        return np.array([self.predict_one(x) for x in X])
+
+# Main function
+def main():
     print("Simple Spam Detector\n")
     choice = input("Train new model? (y/n): ").lower()
+
     if choice == "y":
         path = input("Enter CSV dataset path: ")
-        train_model(path)
+        X_text, y = load_data(path)
+        X = np.array([text_to_features(t) for t in X_text])
+
+        tree = DecisionTree(max_depth=5)
+        tree.fit(X, y)
+
+        preds = tree.predict(X)
+        acc = np.mean(preds == y)
+        print(f"Training complete. Accuracy: {acc:.3f}")
+
+        # Save trained model
+        import pickle
+        with open("decision_tree_model.pkl", "wb") as f:
+            pickle.dump(tree, f)
+        print("Model saved as decision_tree_model.pkl")
+
     else:
+        import pickle, os
+        if not os.path.exists("decision_tree_model.pkl"):
+            print("No trained model found. Train it first.")
+            return
+
+        with open("decision_tree_model.pkl", "rb") as f:
+            tree = pickle.load(f)
+
         sender = input("Sender: ")
-        receiver = input("Recipient: ")
+        receiver = input("Receiver: ")
         subject = input("Subject: ")
         body = input("Body: ")
-        predict_email(sender, receiver, subject, body)
+
+        text = f"{sender} {receiver} {subject} {body}"
+        x_test = text_to_features(text).reshape(1, -1)
+        pred = tree.predict(x_test)[0]
+        print("Prediction:", "SPAM" if pred == 1 else "HAM")
+
+if __name__ == "__main__":
+    main()
