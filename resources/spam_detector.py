@@ -4,7 +4,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report, accuracy_score
 import joblib
@@ -34,12 +34,7 @@ def train_model(data_path):
     model = Pipeline([
         ("tfidf", TfidfVectorizer(max_features=8000, stop_words="english")),
         ("svd", TruncatedSVD(n_components=120, random_state=42)),
-        ("rf", RandomForestClassifier(
-            n_estimators=80,
-            max_depth=12,
-            random_state=42,
-            n_jobs=-1
-        ))
+        ("dt", DecisionTreeClassifier(max_depth=12,random_state=42))
     ])
 
     model.fit(X_train, y_train)
