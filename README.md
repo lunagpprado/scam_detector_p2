@@ -12,4 +12,4 @@ Now with all the files in the correct directories run the .py files in this orde
 1. First run scam_detector_ml.py
 2. Secondly run scam_detector_ui.py
 
-Once the py files are ran a UI window will pop up with all the functionality within the video showcase.
+Once the py files are ran a UI window will pop up with all the functionality featured within the video showcase.
